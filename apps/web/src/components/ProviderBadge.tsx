@@ -44,15 +44,15 @@ export default function ProviderBadge({ provider, region, fromAtlas = false }: P
   return (
     <div
       className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono ${style.bg} ${style.border}`}
-      title={fromAtlas ? 'Live from Atlas API' : 'From environment config'}
+      title={fromAtlas ? 'Live from Atlas API' : 'From environment config (set APP_CLOUD_PROVIDER / APP_REGION)'}
     >
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
       <span className={`font-semibold tracking-wide ${style.text}`}>{label}</span>
       <span className="text-gray-600 select-none">/</span>
       <span className="text-gray-300">{region}</span>
-      {fromAtlas && (
-        <span className="text-mdb-green/70 text-[10px] leading-none select-none">●</span>
-      )}
+      {/* Semantic indicator: green pulse = live data from Atlas, gray = env var fallback */}
+      <span
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ${fromAtlas ? 'bg-mdb-green animate-pulse-fast' : 'bg-gray-600'}`}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Globe,
   ShieldOff,
+  Pencil,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { PublicConfig } from '@atlas-demo/shared';
@@ -34,11 +35,12 @@ export default function ScenarioLauncher({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [outageProvider, setOutageProvider] = useState(defaultOutageProvider ?? 'AWS');
   const [outageRegion, setOutageRegion] = useState(defaultOutageRegion ?? 'US_EAST_1');
+  const [editingTarget, setEditingTarget] = useState(false);
 
   const atlasEnabled = config?.atlasControlPlaneEnabled ?? false;
   const destructiveEnabled = config?.destructiveActionsEnabled ?? false;
 
-  // Sync defaults when Atlas data arrives (only if user hasn't typed)
+  // Sync when Atlas data first arrives, only if user hasn't manually overridden
   const [providerTouched, setProviderTouched] = useState(false);
   const [regionTouched, setRegionTouched] = useState(false);
   if (defaultOutageProvider && !providerTouched && outageProvider !== defaultOutageProvider) {
@@ -47,6 +49,8 @@ export default function ScenarioLauncher({
   if (defaultOutageRegion && !regionTouched && outageRegion !== defaultOutageRegion) {
     setOutageRegion(defaultOutageRegion);
   }
+
+  const hasAtlasTarget = !!defaultOutageProvider;
 
   async function startWorkload(type: 'write' | 'read' | 'update' | 'mixed' | 'bulk') {
     if (loading || isRunning) return;
@@ -184,7 +188,7 @@ export default function ScenarioLauncher({
 
       {/* Atlas Control Plane */}
       <div className="space-y-1 border-t border-white/[0.05] pt-2.5">
-        <p className="text-[9px] text-gray-600 uppercase tracking-[0.18em] font-display mb-1.5">
+        <p className="text-[10px] text-gray-400 uppercase tracking-[0.14em] font-display font-semibold mb-1.5">
           Atlas Control Plane
         </p>
 
@@ -212,21 +216,38 @@ export default function ScenarioLauncher({
           </p>
         )}
 
-        {/* Outage region inputs */}
-        <div className="flex gap-1 pt-0.5">
-          <input
-            className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-mdb-green/40 focus:bg-white/[0.06] font-mono transition-colors duration-150"
-            placeholder="Provider"
-            value={outageProvider}
-            onChange={(e) => { setProviderTouched(true); setOutageProvider(e.target.value); }}
-          />
-          <input
-            className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-mdb-green/40 focus:bg-white/[0.06] font-mono transition-colors duration-150"
-            placeholder="Region"
-            value={outageRegion}
-            onChange={(e) => { setRegionTouched(true); setOutageRegion(e.target.value); }}
-          />
-        </div>
+        {/* Outage target — read-only display when Atlas data is present, editable on override */}
+        {hasAtlasTarget && !editingTarget ? (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <div className="flex-1 flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px] font-mono text-gray-400">{outageProvider}</span>
+              <span className="text-gray-700">/</span>
+              <span className="text-[10px] font-mono text-gray-400">{outageRegion}</span>
+            </div>
+            <button
+              className="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-gray-400 hover:bg-white/[0.05] transition-colors duration-150"
+              onClick={() => setEditingTarget(true)}
+              title="Override outage target"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-1 pt-0.5">
+            <input
+              className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-mdb-green/40 focus:bg-white/[0.06] font-mono transition-colors duration-150"
+              placeholder="Provider"
+              value={outageProvider}
+              onChange={(e) => { setProviderTouched(true); setOutageProvider(e.target.value); }}
+            />
+            <input
+              className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-mdb-green/40 focus:bg-white/[0.06] font-mono transition-colors duration-150"
+              placeholder="Region"
+              value={outageRegion}
+              onChange={(e) => { setRegionTouched(true); setOutageRegion(e.target.value); }}
+            />
+          </div>
+        )}
 
         <button
           className={btnRed}
