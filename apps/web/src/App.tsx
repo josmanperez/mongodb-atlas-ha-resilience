@@ -126,6 +126,7 @@ export default function App() {
               onToast={showToast}
               onFailover={startBurstRefresh}
               isRunning={isRunning}
+              clusterState={clusterInfo?.stateName as string | null | undefined}
               defaultOutageProvider={rawAtlasProvider ?? undefined}
               defaultOutageRegion={rawAtlasRegion ?? undefined}
             />

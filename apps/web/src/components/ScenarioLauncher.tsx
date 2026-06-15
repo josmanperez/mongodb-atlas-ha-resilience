@@ -18,6 +18,7 @@ interface Props {
   onToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   onFailover?: () => void;
   isRunning: boolean;
+  clusterState?: string | null;
   defaultOutageProvider?: string;
   defaultOutageRegion?: string;
 }
@@ -30,6 +31,7 @@ export default function ScenarioLauncher({
   onToast,
   onFailover,
   isRunning,
+  clusterState,
   defaultOutageProvider,
   defaultOutageRegion,
 }: Props) {
@@ -41,6 +43,7 @@ export default function ScenarioLauncher({
 
   const atlasEnabled = config?.atlasControlPlaneEnabled ?? false;
   const destructiveEnabled = config?.destructiveActionsEnabled ?? false;
+  const clusterBusy = !!clusterState && clusterState !== 'IDLE';
 
   // Sync when Atlas data first arrives, only if user hasn't manually overridden
   const [providerTouched, setProviderTouched] = useState(false);
@@ -209,14 +212,29 @@ export default function ScenarioLauncher({
 
         <button
           className={btnOrange}
-          disabled={!atlasEnabled || !destructiveEnabled || loading}
+          disabled={!atlasEnabled || !destructiveEnabled || loading || clusterBusy}
           onClick={() => setConfirmAction('failover')}
-          title={!atlasEnabled ? 'Atlas control plane disabled' : !destructiveEnabled ? 'Set ENABLE_DESTRUCTIVE_ACTIONS=true' : 'Trigger primary failover'}
+          title={
+            !atlasEnabled ? 'Atlas control plane disabled'
+            : !destructiveEnabled ? 'Set ENABLE_DESTRUCTIVE_ACTIONS=true'
+            : clusterBusy ? `Cluster is ${clusterState} — wait for IDLE`
+            : 'Trigger primary failover'
+          }
         >
-          <Zap className="w-3 h-3 shrink-0" /> Trigger Failover
+          <Zap className="w-3 h-3 shrink-0" />
+          {clusterBusy ? 'Election in progress…' : 'Trigger Failover'}
         </button>
 
-        {!destructiveEnabled && atlasEnabled && (
+        {clusterBusy && atlasEnabled && (
+          <div className="flex items-center gap-1.5 px-1 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse shrink-0" />
+            <span className="text-[9px] text-orange-400/80 font-mono">
+              {clusterState} — replica set election underway
+            </span>
+          </div>
+        )}
+
+        {!destructiveEnabled && atlasEnabled && !clusterBusy && (
           <p className="text-[9px] text-gray-600 px-1">
             Requires <span className="font-mono">ENABLE_DESTRUCTIVE_ACTIONS=true</span>
           </p>

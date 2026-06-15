@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import type { TerminalEvent, ConnectionStatus } from '@atlas-demo/shared';
 
@@ -34,13 +34,20 @@ const STATUS_PREFIX: Record<string, string> = {
 export default function Terminal({ events, onClear, connectionStatus }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // true = follow new output; flips to false when user scrolls up intentionally
+  const autoScrollRef = useRef(true);
 
-  useEffect(() => {
+  const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [events]);
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    autoScrollRef.current = distFromBottom < 60;
+  }, []);
+
+  useEffect(() => {
+    if (!autoScrollRef.current) return;
+    bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+  }, [events.length]);
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -75,6 +82,7 @@ export default function Terminal({ events, onClear, connectionStatus }: Props) {
       {/* Log body */}
       <div
         ref={containerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto bg-gray-950 font-mono text-xs p-3 space-y-0.5 scrollbar-thin"
       >
         {events.length === 0 ? (

@@ -35,6 +35,7 @@ export function useAtlas() {
   });
 
   const processTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clusterBurstRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const burstTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchConfig = useCallback(async () => {
@@ -74,10 +75,23 @@ export function useAtlas() {
 
   const startBurstRefresh = useCallback(() => {
     if (burstTimerRef.current) clearTimeout(burstTimerRef.current);
+
+    // Burst-poll both processes (3 s) and cluster state (5 s) for 90 s after failover
     fetchProcesses();
+    fetchCluster();
     scheduleProcess(BURST_INTERVAL);
-    burstTimerRef.current = setTimeout(() => scheduleProcess(NORMAL_INTERVAL), BURST_DURATION);
-  }, [fetchProcesses, scheduleProcess]);
+
+    if (clusterBurstRef.current) clearInterval(clusterBurstRef.current);
+    clusterBurstRef.current = setInterval(fetchCluster, 5_000);
+
+    burstTimerRef.current = setTimeout(() => {
+      scheduleProcess(NORMAL_INTERVAL);
+      if (clusterBurstRef.current) {
+        clearInterval(clusterBurstRef.current);
+        clusterBurstRef.current = null;
+      }
+    }, BURST_DURATION);
+  }, [fetchProcesses, fetchCluster, scheduleProcess]);
 
   useEffect(() => {
     fetchConfig();
@@ -88,6 +102,7 @@ export function useAtlas() {
     return () => {
       clearInterval(clusterTimer);
       if (processTimerRef.current) clearInterval(processTimerRef.current);
+      if (clusterBurstRef.current) clearInterval(clusterBurstRef.current);
       if (burstTimerRef.current) clearTimeout(burstTimerRef.current);
     };
   }, [fetchConfig, fetchCluster, fetchProcesses, scheduleProcess]);
