@@ -103,7 +103,7 @@ async function runWriteLoop(scenarioId: string, cfg: WorkloadConfig, signal: Abo
   }
 }
 
-async function runReadLoop(scenarioId: string, cfg: WorkloadConfig, signal: AbortSignal): Promise<void> {
+async function runReadLoop(_scenarioId: string, cfg: WorkloadConfig, signal: AbortSignal): Promise<void> {
   const collection = getCollection();
   const rp = ReadPreference.fromString(cfg.readPreference ?? config.DEFAULT_READ_PREFERENCE);
   const interval = cfg.intervalMs ?? config.DEFAULT_WORKLOAD_INTERVAL_MS;
@@ -111,8 +111,10 @@ async function runReadLoop(scenarioId: string, cfg: WorkloadConfig, signal: Abor
   while (!signal.aborted) {
     const start = Date.now();
     try {
+      // Read the most recent documents across all scenarios — the read workload
+      // demonstrates read latency and resilience, not scenario isolation.
       const docs = await collection
-        .find({ scenarioId }, { readPreference: rp })
+        .find({}, { readPreference: rp })
         .sort({ createdAt: -1 })
         .limit(10)
         .toArray();
