@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSSE } from './hooks/useSSE';
 import { useAtlas } from './hooks/useAtlas';
@@ -48,6 +48,27 @@ export default function App() {
   const workloadType    = metrics?.workloadType ?? null;
   const recentFailover  = lastFailoverAt !== null && Date.now() - lastFailoverAt < FAILOVER_RECENT_MS;
   const clusterPaused   = clusterInfo?.paused === true;
+
+  // All electable regions from replicationSpecs, sorted by priority desc (priority 7 = preferred primary).
+  const outageRegions = useMemo((): Array<{provider: string; region: string; priority: number}> => {
+    const specs = clusterInfo?.replicationSpecs as Array<Record<string, unknown>> | undefined;
+    if (!specs) return [];
+    const regions: Array<{provider: string; region: string; priority: number}> = [];
+    for (const spec of specs) {
+      const rcs = spec.regionConfigs as Array<Record<string, unknown>> | undefined;
+      if (!rcs) continue;
+      for (const rc of rcs) {
+        const electable = rc.electableSpecs as Record<string, unknown> | undefined;
+        if (!((electable?.nodeCount as number) > 0)) continue;
+        regions.push({
+          provider: (rc.providerName as string) ?? '',
+          region:   (rc.regionName  as string) ?? '',
+          priority: (rc.priority    as number) ?? 0,
+        });
+      }
+    }
+    return regions.sort((a, b) => b.priority - a.priority);
+  }, [clusterInfo]);
 
   // Derive live provider/region from Atlas API replicationSpecs → providerSettings fallback.
   // Raw values (AWS / US_EAST_1) are used for outage simulation API calls.
@@ -148,6 +169,7 @@ export default function App() {
                   workloadType={workloadType}
                   clusterState={clusterInfo?.stateName as string | null | undefined}
                   clusterPaused={clusterPaused}
+                  outageRegions={outageRegions}
                   defaultOutageProvider={rawAtlasProvider ?? undefined}
                   defaultOutageRegion={rawAtlasRegion ?? undefined}
                   readPref={readPref}

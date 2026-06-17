@@ -14,6 +14,8 @@ import {
   FileEdit,
   Database,
   ArrowRightLeft,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { PublicConfig, WorkloadType } from '@atlas-demo/shared';
@@ -27,6 +29,7 @@ interface Props {
   workloadType?:        WorkloadType | null;
   clusterState?:        string | null;
   clusterPaused?:       boolean;
+  outageRegions?:       Array<{ provider: string; region: string; priority: number }>;
   defaultOutageProvider?: string;
   defaultOutageRegion?:   string;
   // Read preference lifted to App so FailoverExplainer can read it too
@@ -90,6 +93,7 @@ export default function ScenarioLauncher({
   workloadType,
   clusterState,
   clusterPaused = false,
+  outageRegions,
   defaultOutageProvider,
   defaultOutageRegion,
   readPref,
@@ -110,10 +114,21 @@ export default function ScenarioLauncher({
     if (!isRunning) setLocalStopped(false);
   }, [isRunning]);
 
-  const effectivelyRunning = isRunning && !localStopped;
+  // Sync outage target from props when user hasn't manually overridden.
+  // Prefer the highest-priority region from the full region list; fall back to the
+  // single default values for single-region clusters.
+  useEffect(() => {
+    if (providerTouched || regionTouched) return;
+    if (outageRegions && outageRegions.length > 0) {
+      setOutageProvider(outageRegions[0].provider);
+      setOutageRegion(outageRegions[0].region);
+    } else if (defaultOutageProvider) {
+      setOutageProvider(defaultOutageProvider);
+      if (defaultOutageRegion) setOutageRegion(defaultOutageRegion);
+    }
+  }, [outageRegions, defaultOutageProvider, defaultOutageRegion, providerTouched, regionTouched]);
 
-  if (defaultOutageProvider && !providerTouched && outageProvider !== defaultOutageProvider) setOutageProvider(defaultOutageProvider);
-  if (defaultOutageRegion   && !regionTouched   && outageRegion   !== defaultOutageRegion)   setOutageRegion(defaultOutageRegion);
+  const effectivelyRunning = isRunning && !localStopped;
 
   const atlasEnabled     = config?.atlasControlPlaneEnabled ?? false;
   const destructiveEnabled = config?.destructiveActionsEnabled ?? false;
@@ -349,7 +364,37 @@ export default function ScenarioLauncher({
         )}
 
         {/* Outage target */}
-        {hasAtlasTarget && !editingTarget ? (
+        {outageRegions && outageRegions.length > 0 && !editingTarget ? (
+          // Multi-region: dropdown listing all electable regions sorted by priority
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <select
+                value={`${outageProvider}||${outageRegion}`}
+                onChange={e => {
+                  const [p, r] = e.target.value.split('||');
+                  setOutageProvider(p);
+                  setOutageRegion(r);
+                }}
+                className="w-full appearance-none bg-white/[0.04] border border-white/[0.08] rounded-lg pl-2.5 pr-7 py-1.5 text-[10px] text-gray-300 font-mono focus:outline-none focus:border-mdb-green/40 transition-colors duration-150 cursor-pointer"
+              >
+                {outageRegions.map(r => (
+                  <option key={`${r.provider}||${r.region}`} value={`${r.provider}||${r.region}`}>
+                    {r.provider} / {r.region}{r.priority === 7 ? '  ★' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-600 pointer-events-none" />
+            </div>
+            <button
+              className="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/[0.05] transition-colors duration-150"
+              onClick={() => setEditingTarget(true)}
+              title="Enter custom outage target"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        ) : hasAtlasTarget && !editingTarget ? (
+          // Single-region: read-only display with edit override
           <div className="flex items-center gap-1.5">
             <div className="flex-1 flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5">
               <span className="text-[10px] font-mono text-gray-400">{outageProvider}</span>
@@ -365,6 +410,7 @@ export default function ScenarioLauncher({
             </button>
           </div>
         ) : (
+          // Manual text inputs (no Atlas data, or user clicked override)
           <div className="flex gap-1">
             <input
               className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-mdb-green/40 font-mono transition-colors duration-150"
@@ -378,6 +424,15 @@ export default function ScenarioLauncher({
               value={outageRegion}
               onChange={e => { setRegionTouched(true); setOutageRegion(e.target.value); }}
             />
+            {outageRegions && outageRegions.length > 0 && (
+              <button
+                className="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/[0.05] transition-colors duration-150"
+                onClick={() => { setEditingTarget(false); setProviderTouched(false); setRegionTouched(false); }}
+                title="Back to region list"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
 
