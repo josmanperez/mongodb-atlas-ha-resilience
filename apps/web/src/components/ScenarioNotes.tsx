@@ -27,22 +27,22 @@ const NOTES: Record<WorkloadType, NoteEntry> = {
   },
   read: {
     title: 'Read Workload',
-    validates: 'Read scalability and read-preference routing (primary vs. secondary).',
+    validates: 'Read routing architecture: where reads land, not just whether they succeed.',
     expected:
-      'Reads return results with low, stable latency. Secondaries serve reads if read preference allows.',
+      'Zero errors and zero throughput loss in both modes. MongoDB driver v6 uses streaming SDAM — Atlas pushes topology changes to the driver within milliseconds, making Test Failover completely transparent to reads regardless of read preference.',
     observe:
-      'Check Reads/sec and p50/p95 latencies. Adjust DEFAULT_READ_PREFERENCE in .env to route reads to secondaries and compare.',
-    tip: 'Enable secondary read preference to see reads survive a primary failover without interruption.',
+      'Watch the id=shard-XX[P/S] tag in the terminal. With Primary, every read shows [P] and the tag changes to the new primary after failover. With Secondary ✦, reads show [S] and are unaffected by who the primary is. The difference is routing architecture — Primary always reads the freshest data; Secondary ✦ offloads read traffic from the primary and adds resilience against primary unavailability.',
+    tip: 'Switch to Secondary ✦ and watch [S] tags appear. Trigger a failover — reads stay on secondaries throughout. If the secondary serving your reads wins the election and becomes the new primary, the driver instantly reroutes to the remaining secondary. The tag stays [S], the shard number may change — but errors: 0.',
   },
   mixed: {
     title: 'Mixed Read/Write',
     validates:
-      'Throughput balance and tail-latency behavior under concurrent read and write pressure.',
+      'Driver resilience under concurrent read and write pressure — both operation types survive a failover transparently.',
     expected:
-      'Both read and write QPS are active simultaneously. Tail latency (p99) may increase under mixed load due to WiredTiger contention.',
+      'Read and write QPS both active simultaneously. A failover triggers retryWrites for the in-flight write and retryReads for any concurrent read. Client error count stays zero.',
     observe:
-      'Watch all three QPS tiles and p99 latency. A rising p99 under stable p50 indicates lock contention.',
-    tip: 'Trigger failover during mixed load to observe how the driver queues both reads and writes during election.',
+      'Watch the Writes/s and Reads/s KPI tiles during a failover — both should recover without dropping to zero. The terminal will show the brief latency spike on the one operation that straddles the election window.',
+    tip: 'This is the hardest HA scenario: two operation streams, one election. Zero errors on both is the proof point.',
   },
   update: {
     title: 'Update Workload',
@@ -65,7 +65,7 @@ const NOTES: Record<WorkloadType, NoteEntry> = {
   },
 };
 
-export default function ScenarioNotes({ activeScenario, metrics }: Props) {
+export default function ScenarioNotes({ metrics }: Props) {
   const workloadType = metrics?.workloadType;
   const note = workloadType ? NOTES[workloadType] : null;
 
@@ -138,16 +138,6 @@ export default function ScenarioNotes({ activeScenario, metrics }: Props) {
             <div className="bg-orange-950/40 border border-orange-900/40 rounded-lg p-3 space-y-1">
               <p className="text-xs font-display font-medium text-orange-400">Demo Tip</p>
               <p className="text-xs text-orange-200/70 leading-relaxed">{note.tip}</p>
-            </div>
-          )}
-
-          {/* Scenario ID */}
-          {activeScenario && (
-            <div className="space-y-1">
-              <p className="text-xs font-display text-gray-500 uppercase tracking-wider">
-                Scenario ID
-              </p>
-              <p className="text-xs text-gray-700 font-mono break-all">{activeScenario}</p>
             </div>
           )}
 

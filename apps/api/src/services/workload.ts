@@ -107,12 +107,18 @@ async function runReadLoop(_scenarioId: string, cfg: WorkloadConfig, signal: Abo
   const collection = getCollection();
   const rp = ReadPreference.fromString(cfg.readPreference ?? config.DEFAULT_READ_PREFERENCE);
   const interval = cfg.intervalMs ?? config.DEFAULT_WORKLOAD_INTERVAL_MS;
+  let serverNote = '';
+  let iteration = 0;
 
   while (!signal.aborted) {
     const start = Date.now();
     try {
-      // Read the most recent documents across all scenarios — the read workload
-      // demonstrates read latency and resilience, not scenario isolation.
+      // Every 5th iteration, probe which physical node is serving reads (runs in parallel
+      // with the find so it doesn't inflate latencyMs). Shows Primary vs Secondary routing.
+      const probePromise = iteration % 5 === 0
+        ? collection.db.command({ hello: 1 }, { readPreference: rp }).catch(() => null)
+        : Promise.resolve(null);
+
       const docs = await collection
         .find({}, { readPreference: rp })
         .sort({ createdAt: -1 })
@@ -120,10 +126,19 @@ async function runReadLoop(_scenarioId: string, cfg: WorkloadConfig, signal: Abo
         .toArray();
       const latencyMs = Date.now() - start;
       metricsTracker.recordOp('read', latencyMs, true);
+
+      const hello = await probePromise;
+      if (hello) {
+        const me = (hello.me as string | undefined) ?? '';
+        const shard = me.match(/shard-\d{2}-\d{2}/)?.[0] ?? me.split(':')[0]?.split('.')[0] ?? '?';
+        const role = (hello.isWritablePrimary === true || hello.ismaster === true) ? 'P' : 'S';
+        serverNote = ` id=${shard}[${role}]`;
+      }
+
       emit({
         type: 'read',
         status: 'success',
-        message: `FIND returned ${docs.length} docs`,
+        message: `FIND ${docs.length} docs${serverNote}`,
         latencyMs,
         region: config.APP_REGION,
       });
@@ -133,6 +148,7 @@ async function runReadLoop(_scenarioId: string, cfg: WorkloadConfig, signal: Abo
       const msg = err instanceof Error ? err.message : String(err);
       emit({ type: 'error', status: 'failure', message: `FIND failed: ${msg}`, latencyMs, region: config.APP_REGION });
     }
+    iteration++;
     emitMetrics();
     await sleep(interval, signal);
   }
@@ -143,20 +159,40 @@ async function runUpdateLoop(scenarioId: string, cfg: WorkloadConfig, signal: Ab
   const writeConcernOpts = wc(cfg);
   const interval = cfg.intervalMs ?? config.DEFAULT_WORKLOAD_INTERVAL_MS;
 
+  // Seed initial documents so the update loop has something to work with
+  const SEED_SIZE = 20;
+  const seed = Array.from({ length: SEED_SIZE }, () => buildDoc(scenarioId, uuidv4(), 'update'));
+  await collection.insertMany(seed, { ordered: false, ...writeConcernOpts });
+
+  // Cycle: pending→active then active→pending so matched/modified are always >0
+  let fromStatus = 'pending';
+  let toStatus   = 'active';
+
   while (!signal.aborted) {
     const start = Date.now();
     try {
       const result = await collection.updateMany(
-        { scenarioId },
-        { $set: { status: 'active', updatedAt: new Date() } },
+        { scenarioId, status: fromStatus },
+        { $set: { status: toStatus, updatedAt: new Date() } },
         writeConcernOpts
       );
+
+      // If nothing matched (docs got cleaned up), reseed
+      if (result.matchedCount === 0) {
+        const reseed = Array.from({ length: SEED_SIZE }, () => buildDoc(scenarioId, uuidv4(), 'update'));
+        await collection.insertMany(reseed, { ordered: false, ...writeConcernOpts });
+        fromStatus = 'pending';
+        toStatus   = 'active';
+      } else {
+        [fromStatus, toStatus] = [toStatus, fromStatus]; // flip for next iteration
+      }
+
       const latencyMs = Date.now() - start;
       metricsTracker.recordOp('update', latencyMs, true);
       emit({
         type: 'update',
         status: 'success',
-        message: `UPDATE matched=${result.matchedCount} modified=${result.modifiedCount}`,
+        message: `UPDATE ${fromStatus === 'pending' ? 'active→pending' : 'pending→active'} matched=${result.matchedCount} modified=${result.modifiedCount}`,
         latencyMs,
         region: config.APP_REGION,
       });

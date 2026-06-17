@@ -52,7 +52,7 @@ function KPITile({
         )}
 
         <div className="relative z-10">
-          <p className="text-[9px] font-display uppercase tracking-[0.12em] text-gray-500 leading-tight mb-1 whitespace-nowrap">
+          <p className="text-[9px] font-display uppercase tracking-[0.12em] text-gray-300 leading-tight mb-1 whitespace-nowrap">
             {label}
           </p>
           <p className={`text-lg font-bold font-display leading-none tabular-nums ${valueColor}`}>
