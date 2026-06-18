@@ -27,15 +27,18 @@ function deriveRole(typeName: string): Role {
   return 'OTHER';
 }
 
-// If the driver's live SDAM knows who the real primary is, demote any node that
-// Atlas API still labels as PRIMARY but doesn't match — Atlas can lag 30–120 s
-// after a regional failover or outage simulation.
+// Driver SDAM is authoritative over the Atlas processes API, which lags 30–120 s
+// after elections and outage simulations:
+//   • if driver knows the primary and this node IS it → promote to PRIMARY
+//     (covers the case where Atlas processes API still says RECOVERING)
+//   • if driver knows the primary and this node CLAIMS primary but isn't it →
+//     demote to RECOVERING (covers the stale-primary-in-Atlas case)
 function resolvedRole(process: AtlasProcess, driverPrimary: string | null | undefined): Role {
-  const atlasRole = deriveRole(process.typeName);
-  if (atlasRole === 'PRIMARY' && driverPrimary && process.id !== driverPrimary) {
-    return 'RECOVERING';
+  if (driverPrimary) {
+    if (process.id === driverPrimary) return 'PRIMARY';
+    if (deriveRole(process.typeName) === 'PRIMARY') return 'RECOVERING';
   }
-  return atlasRole;
+  return deriveRole(process.typeName);
 }
 
 // Trim "cluster0-shard-00-00.xxxxx.mongodb.net" → "shard-00-00"

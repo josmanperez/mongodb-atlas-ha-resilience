@@ -43,6 +43,11 @@ const STATE_COLOR: Record<string, string> = {
   DELETING:  'text-red-400',
 };
 
+// Atlas uses "IDLE" to mean "running normally". Show a friendlier label.
+const STATE_LABEL: Record<string, string> = {
+  IDLE: 'RUNNING',
+};
+
 export default function TopologyPanel({
   config, clusterInfo, processes, driverPrimary, processesLoading, loading, error, onRefresh, onPrimaryChange,
 }: Props) {
@@ -110,7 +115,9 @@ export default function TopologyPanel({
         <div className="space-y-0.5 border-b border-white/[0.05] pb-2">
           <div className="flex justify-between items-center py-1">
             <span className="text-xs text-gray-500">State</span>
-            <span className={`text-xs font-semibold font-display ${stateColor}`}>{stateName ?? 'UNKNOWN'}</span>
+            <span className={`text-xs font-semibold font-display ${stateColor}`}>
+              {stateName ? (STATE_LABEL[stateName] ?? stateName) : 'UNKNOWN'}
+            </span>
           </div>
           <InfoRow label="Type"    value={clusterType} />
           <InfoRow label="Version" value={mongoVersion} />
