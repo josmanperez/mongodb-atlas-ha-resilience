@@ -25,6 +25,8 @@ interface Props {
   onScenarioChange:     (id: string | null) => void;
   onToast:              (msg: string, type: 'success' | 'error' | 'info') => void;
   onFailover?:          () => void;
+  onEventStart?:        (type: 'failover' | 'outage', label: string, currentPrimary: string | null) => void;
+  currentPrimary?:      string | null;
   isRunning:            boolean;
   workloadType?:        WorkloadType | null;
   clusterState?:        string | null;
@@ -89,6 +91,8 @@ export default function ScenarioLauncher({
   onScenarioChange,
   onToast,
   onFailover,
+  onEventStart,
+  currentPrimary = null,
   isRunning,
   workloadType,
   clusterState,
@@ -230,6 +234,7 @@ export default function ScenarioLauncher({
 
   async function triggerFailover() {
     setLoading(true); setConfirmAction(null);
+    onEventStart?.('failover', 'Primary Failover', currentPrimary);
     try {
       const res = await api.triggerFailover(true);
       if (res.success) { onToast('Failover triggered — election in progress', 'success'); onFailover?.(); }
@@ -239,6 +244,7 @@ export default function ScenarioLauncher({
 
   async function startOutage() {
     setLoading(true); setConfirmAction(null);
+    onEventStart?.('outage', `${outageProvider} Outage Simulation`, currentPrimary);
     try {
       const res = await api.startOutage(true, outageProvider, outageRegion);
       if (res.success) {

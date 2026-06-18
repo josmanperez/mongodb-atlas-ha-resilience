@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { useSSE } from './hooks/useSSE';
 import { useAtlas } from './hooks/useAtlas';
+import { useEventRecorder } from './hooks/useEventRecorder';
 import ClusterPausedBanner from './components/ClusterPausedBanner';
 import TopologyPanel from './components/TopologyPanel';
 import ScenarioLauncher from './components/ScenarioLauncher';
@@ -11,6 +12,7 @@ import ScenarioNotes from './components/ScenarioNotes';
 import ConnectionBadge from './components/ConnectionBadge';
 import ProviderBadge from './components/ProviderBadge';
 import FailoverExplainer from './components/FailoverExplainer';
+import HAReportModal from './components/HAReportModal';
 
 type ToastType = 'success' | 'error' | 'info';
 interface Toast { message: string; type: ToastType; }
@@ -25,7 +27,8 @@ const FAILOVER_RECENT_MS = 5 * 60 * 1000; // 5 min
 
 export default function App() {
   const { connected, terminalEvents, csEvents, metrics, clearTerminal } = useSSE();
-  const { config, clusterInfo, processes, driverPrimary, processesLoading, loading, error, refresh, startBurstRefresh, resumeCluster } = useAtlas();
+  const { config, clusterInfo, processes, driverPrimary, processesLoading, loading, error, refresh, startBurstRefresh, resumeCluster, nodeRegionMap } = useAtlas();
+  const { startRecording, showReport, record, dismissReport } = useEventRecorder({ metrics, driverPrimary, nodeRegionMap });
 
   const [activeScenario,   setActiveScenario]   = useState<string | null>(null);
   const [toast,            setToast]            = useState<Toast | null>(null);
@@ -33,6 +36,7 @@ export default function App() {
   const [lastFailoverAt,   setLastFailoverAt]   = useState<number | null>(null);
   const [leftOpen,         setLeftOpen]         = useState(true);
   const [rightOpen,        setRightOpen]        = useState(true);
+  const [reportOpen,       setReportOpen]       = useState(false);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     setToast({ message, type });
@@ -43,6 +47,14 @@ export default function App() {
     setLastFailoverAt(Date.now());
     startBurstRefresh();
   }, [startBurstRefresh]);
+
+  const handleEventStart = useCallback((
+    type: 'failover' | 'outage',
+    label: string,
+    currentPrimary: string | null,
+  ) => {
+    startRecording(type, label, currentPrimary);
+  }, [startRecording]);
 
   const isRunning       = metrics?.workloadStatus === 'running';
   const workloadType    = metrics?.workloadType ?? null;
@@ -70,9 +82,8 @@ export default function App() {
     return regions.sort((a, b) => b.priority - a.priority);
   }, [clusterInfo]);
 
-  // Derive live provider/region from Atlas API replicationSpecs → providerSettings fallback.
-  // Raw values (AWS / US_EAST_1) are used for outage simulation API calls.
-  // Display values are lowercased with underscores replaced by hyphens.
+  // Raw cluster-config values — used only for outage simulation API calls (must
+  // stay as the cluster's static priority-1 region, not the current primary).
   const rawAtlasProvider = (() => {
     const specs = clusterInfo?.replicationSpecs as Array<Record<string, unknown>> | undefined;
     const rc    = specs?.[0]?.regionConfigs    as Array<Record<string, unknown>> | undefined;
@@ -88,8 +99,13 @@ export default function App() {
       ?? null;
   })();
 
-  const liveProvider = rawAtlasProvider?.toLowerCase() ?? null;
-  const liveRegion   = rawAtlasRegion?.toLowerCase().replace(/_/g, '-') ?? null;
+  // Header badge: follow the *current* primary's cloud provider/region so it
+  // updates live during failover/outage (e.g. AWS → GCP after election).
+  // Falls back to the cluster-config region when no primary is known yet.
+  const primaryShard = driverPrimary?.match(/shard-\d{2}-\d{2}/)?.[0];
+  const primaryRegionInfo = primaryShard ? nodeRegionMap.get(primaryShard) : undefined;
+  const liveProvider = (primaryRegionInfo?.provider ?? rawAtlasProvider)?.toLowerCase() ?? null;
+  const liveRegion   = (primaryRegionInfo?.region   ?? rawAtlasRegion)?.toLowerCase().replace(/_/g, '-') ?? null;
 
   return (
     <div className="flex flex-col h-screen bg-[#080809] text-gray-100 overflow-hidden font-sans">
@@ -166,6 +182,8 @@ export default function App() {
                   onScenarioChange={setActiveScenario}
                   onToast={showToast}
                   onFailover={handleFailover}
+                  onEventStart={handleEventStart}
+                  currentPrimary={driverPrimary}
                   isRunning={isRunning}
                   workloadType={workloadType}
                   clusterState={clusterInfo?.stateName as string | null | undefined}
@@ -234,6 +252,31 @@ export default function App() {
         processes={processes}
         recentFailover={recentFailover}
       />
+
+      {/* ── HA Report chip — appears after a failover/outage election completes ── */}
+      {showReport && record && (
+        <div
+          className="fixed bottom-[4.5rem] right-4 z-40"
+          style={{ animation: 'node-enter 300ms cubic-bezier(0.32,0.72,0,1) both' }}
+        >
+          <button
+            onClick={() => setReportOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold font-display transition-all duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96] hover:-translate-y-px shadow-xl bg-gradient-to-b from-white/[0.11] to-white/[0.04] ring-1 ring-white/[0.12] text-white hover:ring-white/[0.22] shadow-[0_4px_24px_rgba(0,0,0,0.5)]"
+          >
+            <FileText className="w-3.5 h-3.5 text-mdb-green" />
+            View HA Report
+            <span className="w-1.5 h-1.5 rounded-full bg-mdb-green animate-pulse-fast" />
+          </button>
+        </div>
+      )}
+
+      {/* ── HA Report Modal ── */}
+      {reportOpen && record && (
+        <HAReportModal
+          record={record}
+          onClose={() => { setReportOpen(false); dismissReport(); }}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '../api/client';
 import type { PublicConfig } from '@atlas-demo/shared';
 
@@ -126,5 +126,46 @@ export function useAtlas() {
     return res;
   }, [startBurstRefresh]);
 
-  return { ...state, refresh: fetchCluster, startBurstRefresh, resumeCluster };
+  // Derives shard-id → { provider, region } using the same inference as the
+  // backend's buildNodeRegionMap: Atlas assigns shard numbers sequentially by
+  // region in priority order (priority-7 region first), matching the sorted
+  // process list (alphabetical by hostname = ascending shard number).
+  const nodeRegionMap = useMemo((): Map<string, { provider: string; region: string }> => {
+    if (!state.clusterInfo || state.processes.length === 0) return new Map();
+    const specs = state.clusterInfo['replicationSpecs'] as Array<Record<string, unknown>> | undefined;
+    if (!specs) return new Map();
+    const regions: Array<{ provider: string; region: string; priority: number; nodeCount: number }> = [];
+    for (const spec of specs) {
+      const rcs = spec['regionConfigs'] as Array<Record<string, unknown>> | undefined;
+      if (!rcs) continue;
+      for (const rc of rcs) {
+        const electable = rc['electableSpecs'] as Record<string, unknown> | undefined;
+        const nodeCount = (electable?.['nodeCount'] as number) ?? 0;
+        if (nodeCount > 0) {
+          regions.push({
+            provider: (rc['providerName'] as string) ?? '',
+            region:   (rc['regionName']   as string) ?? '',
+            priority: (rc['priority']     as number) ?? 0,
+            nodeCount,
+          });
+        }
+      }
+    }
+    regions.sort((a, b) => b.priority - a.priority);
+    const slots: Array<{ provider: string; region: string }> = [];
+    for (const r of regions) {
+      for (let i = 0; i < r.nodeCount; i++) slots.push({ provider: r.provider, region: r.region });
+    }
+    const sorted = [...state.processes].sort((a, b) =>
+      (a.userAlias ?? a.hostname).localeCompare(b.userAlias ?? b.hostname)
+    );
+    const map = new Map<string, { provider: string; region: string }>();
+    sorted.forEach((proc, idx) => {
+      const shardId = (proc.userAlias ?? proc.hostname).match(/shard-\d{2}-\d{2}/)?.[0];
+      if (shardId && slots[idx]) map.set(shardId, slots[idx]);
+    });
+    return map;
+  }, [state.clusterInfo, state.processes]);
+
+  return { ...state, refresh: fetchCluster, startBurstRefresh, resumeCluster, nodeRegionMap };
 }
