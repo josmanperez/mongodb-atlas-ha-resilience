@@ -511,7 +511,13 @@ export default function ScenarioLauncher({
         </button>
         <button
           className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-xs font-medium ${SPRING} disabled:opacity-30 disabled:cursor-not-allowed bg-white/[0.04] border-white/[0.07] text-gray-400 hover:bg-white/[0.08] hover:border-white/[0.13] hover:-translate-y-px`}
-          disabled={!atlasEnabled || loading}
+          disabled={!atlasEnabled || loading || outageSimStatus !== 'SIMULATING'}
+          title={
+            outageSimStatus && outageSimStatus !== 'SIMULATING'
+              ? `Waiting for simulation to be ready (${outageSimStatus?.replace(/_/g, ' ')})…`
+              : !outageSimStatus ? 'No active outage simulation'
+              : 'End the active outage simulation'
+          }
           onClick={() => setConfirmAction('outage_end')}
         >
           <Globe className="w-3.5 h-3.5 shrink-0" /> End Outage Simulation
