@@ -12,20 +12,20 @@ The deployed system consists of a secure, stateless full-stack application runni
 graph TD
     Client[Browser Client]
     
-    subgraph Google Cloud Project (test-mongodb-500214)
-        subgraph Cloud Run (europe-southwest1)
+    subgraph GCP ["Google Cloud Project (test-mongodb-500214)"]
+        subgraph CloudRun ["Cloud Run (europe-southwest1)"]
             Web[resilience-demo-web Nginx]
             Api[resilience-demo-api Node.js]
         end
         
-        subgraph VPC Network (default)
+        subgraph VPC ["VPC Network (default)"]
             PSC[PSC Forwarding Rule: 10.204.0.2]
         end
     end
     
-    subgraph MongoDB Atlas (Madrid region)
+    subgraph Atlas ["MongoDB Atlas (Madrid region)"]
         SA[Service Attachment]
-        DB[(Multi-Region Cluster)]
+        DB[("Multi-Region Cluster")]
     end
 
     Client -- HTTPS --> Web
