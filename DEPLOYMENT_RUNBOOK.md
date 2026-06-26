@@ -165,14 +165,17 @@ To make the default application suitable for a containerized, serverless cloud e
 ### Phase 5: Cloud Run Deployments
 
 #### 1. Deploy the API Service
-We deployed the API to Cloud Run in Madrid (`europe-southwest1`):
+We deployed the API to Cloud Run in Madrid (`europe-southwest1`). Note that because the MongoDB connection uses a private VPC endpoint (PSC), we must attach the service directly to our VPC utilizing **Direct VPC Egress** (`--network=default --subnet=default --vpc-egress=private-ranges-only`):
 ```bash
 gcloud run deploy resilience-demo-api \
     --image europe-southwest1-docker.pkg.dev/test-mongodb-500214/resilience-demo/api:latest \
     --region europe-southwest1 \
     --platform managed \
     --allow-unauthenticated \
-    --set-env-vars="MONGODB_URI=mongodb+srv://placeholder-user:placeholder-pass@placeholder-cluster.mongodb.net/?retryWrites=true&w=majority,APP_REGION=europe-southwest1,APP_CLOUD_PROVIDER=gcp" \
+    --set-env-vars="MONGODB_URI=mongodb+srv://dbGCP:043e9GW8QK7lIomR@hackathon-gcp-psc-0.vwquwo.mongodb.net/?appName=Hackathon-GCP,APP_REGION=europe-southwest1,APP_CLOUD_PROVIDER=gcp" \
+    --network=default \
+    --subnet=default \
+    --vpc-egress=private-ranges-only \
     --project=test-mongodb-500214
 ```
 *   **API Service URL:** `https://resilience-demo-api-43717433608.europe-southwest1.run.app`
@@ -247,11 +250,15 @@ docker push europe-southwest1-docker.pkg.dev/test-mongodb-500214/resilience-demo
 docker push europe-southwest1-docker.pkg.dev/test-mongodb-500214/resilience-demo/web:latest
 
 # 6. Cloud Run Deployments
+# Deploy API with Direct VPC Egress to enable access to the private PSC endpoint
 gcloud run deploy resilience-demo-api \
     --image europe-southwest1-docker.pkg.dev/test-mongodb-500214/resilience-demo/api:latest \
     --region europe-southwest1 \
     --platform managed \
-    --set-env-vars="MONGODB_URI=mongodb+srv://placeholder-user:placeholder-pass@placeholder-cluster.mongodb.net/?retryWrites=true&w=majority,APP_REGION=europe-southwest1,APP_CLOUD_PROVIDER=gcp" \
+    --set-env-vars="MONGODB_URI=mongodb+srv://dbGCP:043e9GW8QK7lIomR@hackathon-gcp-psc-0.vwquwo.mongodb.net/?appName=Hackathon-GCP,APP_REGION=europe-southwest1,APP_CLOUD_PROVIDER=gcp" \
+    --network=default \
+    --subnet=default \
+    --vpc-egress=private-ranges-only \
     --project=test-mongodb-500214
 
 gcloud run deploy resilience-demo-web \

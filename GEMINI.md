@@ -52,3 +52,9 @@ Access the application locally via **http://localhost:8080**.
 
 ### 3. Server Startup Sequence Modularity
 The backend `apps/api/src/index.ts` is designed with an asynchronous database connection routine. When launching or modifying the API service, ensure the Express server starts listening immediately to satisfy Cloud Run's startup health checks, regardless of current MongoDB availability.
+
+### 4. Direct VPC Egress for MongoDB Atlas PSC
+Because the MongoDB connection routes through Private Service Connect (using private IP `10.204.0.2`), the Cloud Run API service (`resilience-demo-api`) must have Direct VPC Egress enabled.
+* **Instruction:** When deploying or updating the API service, always include the Direct VPC Egress flags:
+  `--network=default --subnet=default --vpc-egress=private-ranges-only`
+
