@@ -29,7 +29,9 @@ export function useSSE() {
   const connect = useCallback(() => {
     if (esRef.current) return;
 
-    const es = new EventSource('/api/events/stream');
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const sseUrl = isLocal ? 'http://localhost:8081/api/events/stream' : '/api/events/stream';
+    const es = new EventSource(sseUrl);
     esRef.current = es;
 
     es.onopen = () => setState((s) => ({ ...s, connected: true }));
