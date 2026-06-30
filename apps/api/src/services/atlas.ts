@@ -183,10 +183,16 @@ export async function getOutageStatus(): Promise<Record<string, unknown>> {
   if (!projectId || !clusterName) {
     throw new Error('ATLAS_PROJECT_ID and ATLAS_CLUSTER_NAME must be configured.');
   }
-  return atlasRequest<Record<string, unknown>>(
-    'GET',
-    `/groups/${projectId}/clusters/${clusterName}/outageSimulation`
-  );
+  try {
+    return await atlasRequest<Record<string, unknown>>(
+      'GET',
+      `/groups/${projectId}/clusters/${clusterName}/outageSimulation`
+    );
+  } catch (err) {
+    // Atlas returns 404 when no outage simulation is active — not an error condition
+    if (err instanceof Error && err.message === 'HTTP 404') return {};
+    throw err;
+  }
 }
 
 export interface AtlasProcess {

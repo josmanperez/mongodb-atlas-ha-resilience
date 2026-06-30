@@ -30,22 +30,23 @@ app.use('/api/settings', settingsRouter);
 app.use(errorHandler);
 
 async function start(): Promise<void> {
+  const port = Number(config.PORT);
+  app.listen(port, () => {
+    console.log(`[Atlas HA Demo] API listening on http://localhost:${port}`);
+    console.log(`[Atlas HA Demo] Atlas control plane: ${config.ENABLE_ATLAS_CONTROL_PLANE ? 'ENABLED' : 'disabled'}`);
+    console.log(`[Atlas HA Demo] Destructive actions: ${config.ENABLE_DESTRUCTIVE_ACTIONS ? 'ENABLED' : 'disabled'}`);
+  });
+
   try {
     await getClient();
     console.log('[Atlas HA Demo] MongoDB connected');
-
     await startChangeStream();
     console.log('[Atlas HA Demo] Change stream started');
-
-    const port = Number(config.PORT);
-    app.listen(port, () => {
-      console.log(`[Atlas HA Demo] API listening on http://localhost:${port}`);
-      console.log(`[Atlas HA Demo] Atlas control plane: ${config.ENABLE_ATLAS_CONTROL_PLANE ? 'ENABLED' : 'disabled'}`);
-      console.log(`[Atlas HA Demo] Destructive actions: ${config.ENABLE_DESTRUCTIVE_ACTIONS ? 'ENABLED' : 'disabled'}`);
-    });
   } catch (err) {
-    console.error('[Atlas HA Demo] Failed to start:', err);
-    process.exit(1);
+    // Non-fatal: the settings endpoint remains reachable so the user can
+    // override the URI via the UI without restarting the server.
+    console.warn('[Atlas HA Demo] Initial MongoDB connection failed — use the settings UI to set a working URI.');
+    console.warn(err);
   }
 }
 

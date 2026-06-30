@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, FileText, Settings } from 'lucide-react';
 import { useSSE } from './hooks/useSSE';
 import { useAtlas } from './hooks/useAtlas';
@@ -40,8 +40,13 @@ export default function App() {
   const [reportOpen,       setReportOpen]       = useState(false);
   const [settingsOpen,     setSettingsOpen]     = useState(false);
 
-  // Re-apply any saved connection override from localStorage on startup
-  useEffect(() => { restoreConnectionOverride(); }, []);
+  // Re-apply any saved connection override whenever the SSE comes (back) up.
+  // This covers both initial load and API restarts (which wipe the in-memory override).
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    if (connected && !prevConnected.current) restoreConnectionOverride();
+    prevConnected.current = connected;
+  }, [connected]);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     setToast({ message, type });

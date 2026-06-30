@@ -46,6 +46,7 @@ router.post('/connection/test', async (req, res) => {
     serverSelectionTimeoutMS: 8_000,
     connectTimeoutMS: 8_000,
   });
+  testClient.on('error', () => {});
   try {
     await testClient.connect();
     await testClient.db().command({ ping: 1 });
@@ -70,7 +71,7 @@ router.post('/connection', async (req, res) => {
   }
   const { mongoUri, clusterName } = parse.data;
 
-  stopWorkload();
+  try { stopWorkload(); } catch { /* no workload running */ }
   stopChangeStream();
   await closeClient();
 
@@ -93,7 +94,7 @@ router.post('/connection', async (req, res) => {
 
 // DELETE /api/settings/connection — reset to .env values
 router.delete('/connection', async (req, res) => {
-  stopWorkload();
+  try { stopWorkload(); } catch { /* no workload running */ }
   stopChangeStream();
   await closeClient();
 

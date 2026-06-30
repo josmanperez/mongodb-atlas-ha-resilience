@@ -44,28 +44,24 @@ export async function getClient(): Promise<MongoClient> {
     retryReads: true,
   });
 
+  // Attach error handler before connect() so that if connect() rejects and the
+  // client is abandoned (client = null), any subsequent async error events from
+  // the driver don't become unhandled 'error' events that crash the process.
+  client.on('error', () => { connectionStatus = 'error'; });
+  client.on('serverOpening', () => { connectionStatus = 'connected'; });
+  client.on('serverClosed', () => { connectionStatus = 'reconnecting'; });
+  client.on('close', () => { connectionStatus = 'disconnected'; });
+
   try {
     await client.connect();
     connectionStatus = 'connected';
-
-    client.on('serverOpening', () => {
-      connectionStatus = 'connected';
-    });
-    client.on('serverClosed', () => {
-      connectionStatus = 'reconnecting';
-    });
-    client.on('error', () => {
-      connectionStatus = 'error';
-    });
-    client.on('close', () => {
-      connectionStatus = 'disconnected';
-    });
-
     console.log('[MongoDB] Client connected');
     return client;
   } catch (err) {
     connectionStatus = 'error';
+    const failedClient = client;
     client = null;
+    failedClient.close().catch(() => {});
     throw err;
   }
 }
