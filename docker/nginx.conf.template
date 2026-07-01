@@ -5,10 +5,10 @@ server {
 
     # Required for SSE: disable buffering on the /api/events path
     location /api/events/ {
-        proxy_pass http://api:3001/api/events/;
+        proxy_pass ${API_URL}/api/events/;
         proxy_http_version 1.1;
         proxy_set_header Connection '';
-        proxy_set_header Host $host;
+        proxy_ssl_server_name on;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400s;
@@ -17,9 +17,9 @@ server {
 
     # All other API routes
     location /api/ {
-        proxy_pass http://api:3001/api/;
+        proxy_pass ${API_URL}/api/;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_ssl_server_name on;
         proxy_set_header X-Real-IP $remote_addr;
     }
 
@@ -28,3 +28,4 @@ server {
         try_files $uri $uri/ /index.html;
     }
 }
+
